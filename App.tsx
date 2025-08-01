@@ -1,28 +1,27 @@
-/**
- * Sample React Native App
- * https://github.com/facebook/react-native
- *
- * @format
- */
+// App.tsx
+import React from 'react';
+import { NavigationContainer } from '@react-navigation/native';
+import BottomTabs from './navigation/BottomTabs';
+import Login from './screens/Login';
+import { Buffer } from 'buffer';
+global.Buffer = Buffer;
 
-import { NewAppScreen } from '@react-native/new-app-screen';
-import { StatusBar, StyleSheet, useColorScheme, View } from 'react-native';
+export default function App() {
+  const [isLoggedIn, setIsLoggedIn] = React.useState(false);
+  const [userId, setUserId] = React.useState<number | null>(null);
 
-function App() {
-  const isDarkMode = useColorScheme() === 'dark';
+  const handleLogin = (userId: number) => {
+    setUserId(userId);
+    setIsLoggedIn(true);
+  };
 
   return (
-    <View style={styles.container}>
-      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
-      <NewAppScreen templateFileName="App.tsx" />
-    </View>
+    <NavigationContainer>
+      {isLoggedIn && userId ? (
+        <BottomTabs userId={userId} />
+      ) : (
+        <Login onLogin={handleLogin} />
+      )}
+    </NavigationContainer>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-});
-
-export default App;
