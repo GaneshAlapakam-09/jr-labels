@@ -1,9 +1,9 @@
-import React, { useEffect, useState } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  ScrollView, 
+import React, { useEffect, useState, useCallback } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
   ActivityIndicator,
   Image,
   RefreshControl,
@@ -15,23 +15,29 @@ import {
 } from 'react-native';
 import axios from 'axios';
 import Icon from 'react-native-vector-icons/MaterialIcons';
+import { debounce } from 'lodash';
 
 interface Vendor {
   id: number;
+  vendor_username: string;
+  vendor_password: string;
   shop: string;
   fssai: string;
   role: string;
+  item_count: number;
+  last_login: string;
 }
 
 interface DashboardData {
   fssai: string;
+  vendor_username: string;
   role: string;
   shopName: string;
   allVendors: Vendor[];
 }
 
 interface AddVendorForm {
-  username: string;
+  vendor_username: string;
   password: string;
   shop: string;
   fssai: string;
@@ -48,25 +54,32 @@ interface DashboardScreenProps {
 
 const Dashboard: React.FC<DashboardScreenProps> = ({ route }) => {
   const { userId } = route.params;
-  const [dashboardData, setDashboardData] = useState<DashboardData>({ 
-    fssai: '', 
-    role: '', 
-    shopName: '', 
-    allVendors: [] 
+  const [dashboardData, setDashboardData] = useState<DashboardData>({
+    fssai: '',
+    vendor_username: '',
+    role: '',
+    shopName: '',
+    allVendors: []
   });
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
   const [showAddVendorModal, setShowAddVendorModal] = useState(false);
+  const [errors, setErrors] = useState<Partial<AddVendorForm>>({});
   const [showEditVendorModal, setShowEditVendorModal] = useState(false);
   const [selectedVendor, setSelectedVendor] = useState<Vendor | null>(null);
   const [formData, setFormData] = useState<AddVendorForm>({
-    username: '',
+    vendor_username: '',
     password: '',
     shop: '',
     fssai: '',
     role: 'vendor'
   });
+  const [showPassword, setShowPassword] = useState(false);
+  const [usernameAvailable, setUsernameAvailable] = useState<boolean | null>(null);
+  const [checkingUsername, setCheckingUsername] = useState(false);
+  const [editUsernameAvailable, setEditUsernameAvailable] = useState<boolean | null>(null);
+  const [checkingEditUsername, setCheckingEditUsername] = useState(false);
 
   const fetchData = async () => {
     try {
@@ -91,17 +104,117 @@ const Dashboard: React.FC<DashboardScreenProps> = ({ route }) => {
     fetchData();
   };
 
+  // Debounced username availability check for add modal
+  const checkUsernameAvailability = useCallback(
+    debounce(async (username: string) => {
+      if (!username.trim()) {
+        setUsernameAvailable(null);
+        return;
+      }
+
+      try {
+        setCheckingUsername(true);
+        const response = await axios.get(
+          `http://66.103.210.129:8777/label/printer/check-username/?username=${username}`
+        );
+        setUsernameAvailable(response.data.available);
+      } catch (error) {
+        console.error('Error checking username:', error);
+        setUsernameAvailable(null);
+      } finally {
+        setCheckingUsername(false);
+      }
+    }, 500),
+    []
+  );
+
+  // Debounced username availability check for edit modal
+  const checkEditUsernameAvailability = useCallback(
+    debounce(async (username: string, currentUsername: string) => {
+      if (!username.trim() || username === currentUsername) {
+        setEditUsernameAvailable(null);
+        return;
+      }
+
+      try {
+        setCheckingEditUsername(true);
+        const response = await axios.get(
+          `http://66.103.210.129:8777/label/printer/check-username/?username=${username}`
+        );
+        setEditUsernameAvailable(response.data.available);
+      } catch (error) {
+        console.error('Error checking username:', error);
+        setEditUsernameAvailable(null);
+      } finally {
+        setCheckingEditUsername(false);
+      }
+    }, 500),
+    []
+  );
+
+  useEffect(() => {
+    return () => {
+      checkUsernameAvailability.cancel();
+      checkEditUsernameAvailability.cancel();
+    };
+  }, [checkUsernameAvailability, checkEditUsernameAvailability]);
+
+  const validateForm = (data: AddVendorForm) => {
+    const errors: Partial<AddVendorForm> = {};
+
+    if (!data.vendor_username.trim()) {
+      errors.vendor_username = 'Username is required';
+    }
+
+    if (data.shop.length > 15) {
+      errors.shop = 'Shop name must be 14 characters or less';
+    }
+
+    if (data.fssai.length > 15) {
+      errors.fssai = 'FSSAI must be 14 characters or less';
+    }
+
+    if (showAddVendorModal && !data.password.trim()) {
+      errors.password = 'Password is required';
+    }
+
+    if (!data.shop.trim()) {
+      errors.shop = 'Shop name is required';
+    }
+
+    if (!data.fssai.trim()) {
+      errors.fssai = 'FSSAI is required';
+    }
+
+    return errors;
+  };
+
   const handleAddVendor = async () => {
+    const validationErrors = validateForm(formData);
+    setErrors(validationErrors);
+
+    if (Object.keys(validationErrors).length > 0 || usernameAvailable === false) {
+      if (usernameAvailable === false && !validationErrors.vendor_username) {
+        setErrors({
+          ...errors,
+          vendor_username: 'Username already exists'
+        });
+      }
+      return;
+    }
+
     try {
       await axios.post('http://66.103.210.129:8777/label/printer/addvendor/', formData);
       setShowAddVendorModal(false);
       setFormData({
-        username: '',
+        vendor_username: '',
         password: '',
         shop: '',
         fssai: '',
         role: 'vendor'
       });
+      setErrors({});
+      setUsernameAvailable(null);
       fetchData();
       Alert.alert('Success', 'Vendor added successfully');
     } catch (error) {
@@ -112,11 +225,47 @@ const Dashboard: React.FC<DashboardScreenProps> = ({ route }) => {
 
   const handleEditVendor = async () => {
     if (!selectedVendor) return;
-    
+
+    const validationErrors = validateForm(formData);
+    setErrors(validationErrors);
+
+    // Check if username was changed and validate availability
+    if (formData.vendor_username !== selectedVendor.vendor_username) {
+      if (editUsernameAvailable === false) {
+        setErrors({
+          ...errors,
+          vendor_username: 'Username already exists'
+        });
+        return;
+      }
+      
+      if (editUsernameAvailable === null) {
+        Alert.alert('Please wait', 'Username availability check is in progress');
+        return;
+      }
+    }
+
+    if (Object.keys(validationErrors).length > 0) {
+      return;
+    }
+
     try {
-      await axios.put(`http://66.103.210.129:8777/label/printer/updatevendor/${selectedVendor.id}/`, formData);
+      const payload = {
+        vendor_username: formData.vendor_username,
+        shop: formData.shop,
+        fssai: formData.fssai,
+        role: formData.role,
+        ...(formData.password && { password: formData.password })
+      };
+
+      await axios.put(
+        `http://66.103.210.129:8777/label/printer/updatevendor/${selectedVendor.id}`,
+        payload
+      );
       setShowEditVendorModal(false);
       setSelectedVendor(null);
+      setErrors({});
+      setEditUsernameAvailable(null);
       fetchData();
       Alert.alert('Success', 'Vendor updated successfully');
     } catch (error) {
@@ -125,15 +274,46 @@ const Dashboard: React.FC<DashboardScreenProps> = ({ route }) => {
     }
   };
 
+  const handleCancelAdd = () => {
+    setShowAddVendorModal(false);
+    setFormData({
+      vendor_username: '',
+      password: '',
+      shop: '',
+      fssai: '',
+      role: 'vendor'
+    });
+    setErrors({});
+    setUsernameAvailable(null);
+    setShowPassword(false);
+  };
+
+  const handleCancelEdit = () => {
+    setShowEditVendorModal(false);
+    setSelectedVendor(null);
+    setFormData({
+      vendor_username: '',
+      password: '',
+      shop: '',
+      fssai: '',
+      role: 'vendor'
+    });
+    setErrors({});
+    setEditUsernameAvailable(null);
+    setShowPassword(false);
+  };
+
   const openEditModal = (vendor: Vendor) => {
     setSelectedVendor(vendor);
     setFormData({
-      username: '',
+      vendor_username: vendor.vendor_username,
       password: '',
       shop: vendor.shop,
       fssai: vendor.fssai,
       role: vendor.role
     });
+    setEditUsernameAvailable(null);
+    setShowPassword(false);
     setShowEditVendorModal(true);
   };
 
@@ -141,11 +321,33 @@ const Dashboard: React.FC<DashboardScreenProps> = ({ route }) => {
     <View style={styles.vendorCard}>
       <View style={styles.vendorInfo}>
         <Text style={styles.vendorName}>{item.shop}</Text>
-        <Text style={styles.vendorFssai}>FSSAI: {item.fssai}</Text>
-        <Text style={styles.vendorRole}>Role: {item.role}</Text>
+        <View style={styles.detailRow}>
+          <Text style={styles.detailLabel}>Username:</Text>
+          <Text style={styles.detailValue}>{item.vendor_username}</Text>
+        </View>
+        <View style={styles.detailRow}>
+          <Text style={styles.detailLabel}>Password:</Text>
+          <Text style={styles.detailValue}>{item.vendor_password}</Text>
+        </View>
+        <View style={styles.detailRow}>
+          <Text style={styles.detailLabel}>FSSAI:</Text>
+          <Text style={styles.detailValue}>{item.fssai}</Text>
+        </View>
+        <View style={styles.detailRow}>
+          <Text style={styles.detailLabel}>Role:</Text>
+          <Text style={styles.detailValue}>{item.role}</Text>
+        </View>
+        <View style={styles.detailRow}>
+          <Text style={styles.detailLabel}>Items:</Text>
+          <Text style={styles.detailValue}>{item.item_count}</Text>
+        </View>
+        <View style={styles.detailRow}>
+          <Text style={styles.detailLabel}>Last Login:</Text>
+          <Text style={styles.detailValue}>{item.last_login}</Text>
+        </View>
       </View>
       {dashboardData.role === 'admin' && (
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.editButton}
           onPress={() => openEditModal(item)}
         >
@@ -193,6 +395,7 @@ const Dashboard: React.FC<DashboardScreenProps> = ({ route }) => {
         <View style={styles.shopInfo}>
           <Text style={styles.shopName}>{dashboardData.shopName}</Text>
           <Text style={styles.roleText}>Role: {dashboardData.role}</Text>
+          <Text style={styles.usernameText}>Username: {dashboardData.vendor_username}</Text>
         </View>
         <Image
           source={require('../assets/fast-food.png')}
@@ -214,7 +417,7 @@ const Dashboard: React.FC<DashboardScreenProps> = ({ route }) => {
         <View style={styles.adminSection}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Vendor Management</Text>
-            <TouchableOpacity 
+            <TouchableOpacity
               style={styles.addButton}
               onPress={() => setShowAddVendorModal(true)}
             >
@@ -236,41 +439,79 @@ const Dashboard: React.FC<DashboardScreenProps> = ({ route }) => {
         visible={showAddVendorModal}
         animationType="slide"
         transparent={true}
-        onRequestClose={() => setShowAddVendorModal(false)}
+        onRequestClose={handleCancelAdd}
       >
         <View style={styles.modalContainer}>
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Add New Vendor</Text>
-            
+
             <TextInput
-              style={styles.input}
+              style={[styles.input, (usernameAvailable === false || errors.vendor_username) && styles.inputError]}
               placeholder="Username"
-              value={formData.username}
-              onChangeText={(text) => setFormData({...formData, username: text})}
+              value={formData.vendor_username}
+              onChangeText={(text) => {
+                setFormData({ ...formData, vendor_username: text });
+                checkUsernameAvailability(text);
+                if (errors.vendor_username) setErrors({ ...errors, vendor_username: undefined });
+              }}
             />
-            
+            {checkingUsername && (
+              <View style={styles.availabilityCheck}>
+                <ActivityIndicator size="small" color="#6b46c1" />
+                <Text style={styles.availabilityText}>Checking availability...</Text>
+              </View>
+            )}
+            {usernameAvailable === false && (
+              <Text style={styles.errorText}>Username already exists</Text>
+            )}
+            {usernameAvailable === true && (
+              <Text style={styles.availableText}>Username available</Text>
+            )}
+            {errors.vendor_username && (
+              <Text style={styles.errorText}>{errors.vendor_username}</Text>
+            )}
+
+            <View style={styles.passwordContainer}>
+              <TextInput
+                style={[styles.input, { flex: 1 }, errors.password && styles.inputError]}
+                placeholder="Password"
+                secureTextEntry={!showPassword}
+                value={formData.password}
+                onChangeText={(text) => setFormData({ ...formData, password: text })}
+              />
+              <TouchableOpacity 
+                style={styles.eyeIcon} 
+                onPress={() => setShowPassword(!showPassword)}
+              >
+                <Icon name={showPassword ? "visibility-off" : "visibility"} size={20} />
+              </TouchableOpacity>
+            </View>
+            {errors.password && <Text style={styles.errorText}>{errors.password}</Text>}
+
             <TextInput
-              style={styles.input}
-              placeholder="Password"
-              secureTextEntry={true}
-              value={formData.password}
-              onChangeText={(text) => setFormData({...formData, password: text})}
-            />
-            
-            <TextInput
-              style={styles.input}
+              style={[styles.input, errors.shop && styles.inputError]}
               placeholder="Shop Name"
               value={formData.shop}
-              onChangeText={(text) => setFormData({...formData, shop: text})}
+              onChangeText={(text) => {
+                setFormData({ ...formData, shop: text });
+                if (errors.shop) setErrors({ ...errors, shop: undefined });
+              }}
+              maxLength={14}
             />
-            
+            {errors.shop && <Text style={styles.errorText}>{errors.shop}</Text>}
+
             <TextInput
-              style={styles.input}
+              style={[styles.input, errors.fssai && styles.inputError]}
               placeholder="FSSAI Number"
               value={formData.fssai}
-              onChangeText={(text) => setFormData({...formData, fssai: text})}
+              onChangeText={(text) => {
+                setFormData({ ...formData, fssai: text });
+                if (errors.fssai) setErrors({ ...errors, fssai: undefined });
+              }}
+              maxLength={14}
             />
-            
+            {errors.fssai && <Text style={styles.errorText}>{errors.fssai}</Text>}
+
             <View style={styles.roleContainer}>
               <Text style={styles.roleLabel}>Role:</Text>
               <TouchableOpacity
@@ -278,7 +519,7 @@ const Dashboard: React.FC<DashboardScreenProps> = ({ route }) => {
                   styles.roleButton,
                   formData.role === 'admin' && styles.roleButtonSelected
                 ]}
-                onPress={() => setFormData({...formData, role: 'admin'})}
+                onPress={() => setFormData({ ...formData, role: 'admin' })}
               >
                 <Text style={formData.role === 'admin' ? styles.roleButtonTextSelected : styles.roleButtonText}>Admin</Text>
               </TouchableOpacity>
@@ -287,7 +528,7 @@ const Dashboard: React.FC<DashboardScreenProps> = ({ route }) => {
                   styles.roleButton,
                   formData.role === 'vendor' && styles.roleButtonSelected
                 ]}
-                onPress={() => setFormData({...formData, role: 'vendor'})}
+                onPress={() => setFormData({ ...formData, role: 'vendor' })}
               >
                 <Text style={formData.role === 'vendor' ? styles.roleButtonTextSelected : styles.roleButtonText}>Vendor</Text>
               </TouchableOpacity>
@@ -296,7 +537,7 @@ const Dashboard: React.FC<DashboardScreenProps> = ({ route }) => {
             <View style={styles.modalButtons}>
               <TouchableOpacity
                 style={[styles.modalButton, styles.cancelButton]}
-                onPress={() => setShowAddVendorModal(false)}
+                onPress={handleCancelAdd}
               >
                 <Text style={styles.cancelButtonText}>Cancel</Text>
               </TouchableOpacity>
@@ -316,41 +557,80 @@ const Dashboard: React.FC<DashboardScreenProps> = ({ route }) => {
         visible={showEditVendorModal}
         animationType="slide"
         transparent={true}
-        onRequestClose={() => setShowEditVendorModal(false)}
+        onRequestClose={handleCancelEdit}
       >
         <View style={styles.modalContainer}>
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Edit Vendor</Text>
-            
+
             <TextInput
-              style={styles.input}
+              style={[styles.input, (editUsernameAvailable === false || errors.vendor_username) && styles.inputError]}
               placeholder="Username"
-              value={formData.username}
-              onChangeText={(text) => setFormData({...formData, username: text})}
+              value={formData.vendor_username}
+              onChangeText={(text) => {
+                setFormData({ ...formData, vendor_username: text });
+                if (selectedVendor) {
+                  checkEditUsernameAvailability(text, selectedVendor.vendor_username);
+                }
+                if (errors.vendor_username) setErrors({ ...errors, vendor_username: undefined });
+              }}
             />
-            
+            {checkingEditUsername && (
+              <View style={styles.availabilityCheck}>
+                <ActivityIndicator size="small" color="#6b46c1" />
+                <Text style={styles.availabilityText}>Checking availability...</Text>
+              </View>
+            )}
+            {editUsernameAvailable === false && (
+              <Text style={styles.errorText}>Username already exists</Text>
+            )}
+            {editUsernameAvailable === true && (
+              <Text style={styles.availableText}>Username available</Text>
+            )}
+            {errors.vendor_username && (
+              <Text style={styles.errorText}>{errors.vendor_username}</Text>
+            )}
+
+            <View style={styles.passwordContainer}>
+              <TextInput
+                style={[styles.input, { flex: 1 }]}
+                placeholder="Password (leave empty to keep unchanged)"
+                secureTextEntry={!showPassword}
+                value={formData.password}
+                onChangeText={(text) => setFormData({ ...formData, password: text })}
+              />
+              <TouchableOpacity 
+                style={styles.eyeIcon} 
+                onPress={() => setShowPassword(!showPassword)}
+              >
+                <Icon name={showPassword ? "visibility-off" : "visibility"} size={20} />
+              </TouchableOpacity>
+            </View>
+
             <TextInput
-              style={styles.input}
-              placeholder="Password (leave empty to keep unchanged)"
-              secureTextEntry={true}
-              value={formData.password}
-              onChangeText={(text) => setFormData({...formData, password: text})}
-            />
-            
-            <TextInput
-              style={styles.input}
+              style={[styles.input, errors.shop && styles.inputError]}
               placeholder="Shop Name"
               value={formData.shop}
-              onChangeText={(text) => setFormData({...formData, shop: text})}
+              onChangeText={(text) => {
+                setFormData({ ...formData, shop: text });
+                if (errors.shop) setErrors({ ...errors, shop: undefined });
+              }}
+              maxLength={14}
             />
-            
+            {errors.shop && <Text style={styles.errorText}>{errors.shop}</Text>}
+
             <TextInput
-              style={styles.input}
+              style={[styles.input, errors.fssai && styles.inputError]}
               placeholder="FSSAI Number"
               value={formData.fssai}
-              onChangeText={(text) => setFormData({...formData, fssai: text})}
+              onChangeText={(text) => {
+                setFormData({ ...formData, fssai: text });
+                if (errors.fssai) setErrors({ ...errors, fssai: undefined });
+              }}
+              maxLength={14}
             />
-            
+            {errors.fssai && <Text style={styles.errorText}>{errors.fssai}</Text>}
+
             <View style={styles.roleContainer}>
               <Text style={styles.roleLabel}>Role:</Text>
               <TouchableOpacity
@@ -358,7 +638,7 @@ const Dashboard: React.FC<DashboardScreenProps> = ({ route }) => {
                   styles.roleButton,
                   formData.role === 'admin' && styles.roleButtonSelected
                 ]}
-                onPress={() => setFormData({...formData, role: 'admin'})}
+                onPress={() => setFormData({ ...formData, role: 'admin' })}
               >
                 <Text style={formData.role === 'admin' ? styles.roleButtonTextSelected : styles.roleButtonText}>Admin</Text>
               </TouchableOpacity>
@@ -367,7 +647,7 @@ const Dashboard: React.FC<DashboardScreenProps> = ({ route }) => {
                   styles.roleButton,
                   formData.role === 'vendor' && styles.roleButtonSelected
                 ]}
-                onPress={() => setFormData({...formData, role: 'vendor'})}
+                onPress={() => setFormData({ ...formData, role: 'vendor' })}
               >
                 <Text style={formData.role === 'vendor' ? styles.roleButtonTextSelected : styles.roleButtonText}>Vendor</Text>
               </TouchableOpacity>
@@ -376,7 +656,7 @@ const Dashboard: React.FC<DashboardScreenProps> = ({ route }) => {
             <View style={styles.modalButtons}>
               <TouchableOpacity
                 style={[styles.modalButton, styles.cancelButton]}
-                onPress={() => setShowEditVendorModal(false)}
+                onPress={handleCancelEdit}
               >
                 <Text style={styles.cancelButtonText}>Cancel</Text>
               </TouchableOpacity>
@@ -429,7 +709,11 @@ const styles = StyleSheet.create({
   roleText: {
     color: 'white',
     fontSize: 16,
-    marginTop: 8,
+    marginBottom: 4,
+  },
+  usernameText: {
+    color: 'white',
+    fontSize: 16,
   },
   shopImage: {
     width: 80,
@@ -468,10 +752,15 @@ const styles = StyleSheet.create({
   },
   errorText: {
     color: '#e53e3e',
-    fontSize: 18,
-    marginTop: 16,
-    textAlign: 'center',
-    marginHorizontal: 24,
+    fontSize: 12,
+    marginBottom: 8,
+    marginLeft: 4,
+  },
+  availableText: {
+    color: '#38a169',
+    fontSize: 12,
+    marginBottom: 8,
+    marginLeft: 4,
   },
   refreshButton: {
     marginTop: 20,
@@ -527,16 +816,23 @@ const styles = StyleSheet.create({
   vendorName: {
     fontSize: 16,
     fontWeight: 'bold',
+    marginBottom: 8,
+    color: '#2d3748',
+  },
+  detailRow: {
+    flexDirection: 'row',
     marginBottom: 4,
   },
-  vendorFssai: {
+  detailLabel: {
     fontSize: 14,
     color: '#4a5568',
-    marginBottom: 4,
+    fontWeight: 'bold',
+    width: 80,
   },
-  vendorRole: {
+  detailValue: {
     fontSize: 14,
     color: '#4a5568',
+    flex: 1,
   },
   editButton: {
     padding: 8,
@@ -565,8 +861,24 @@ const styles = StyleSheet.create({
     borderColor: '#ddd',
     borderRadius: 6,
     padding: 12,
-    marginBottom: 16,
+    marginBottom: 8,
     color: '#2d3748',
+  },
+  inputError: {
+    borderColor: '#e53e3e',
+  },
+  passwordContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 6,
+    marginBottom: 8,
+  },
+  eyeIcon: {
+    position: 'absolute',
+    right: 10,
+    padding: 10,
   },
   roleContainer: {
     flexDirection: 'row',
@@ -619,6 +931,16 @@ const styles = StyleSheet.create({
   submitButtonText: {
     color: 'white',
     fontWeight: 'bold',
+  },
+  availabilityCheck: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  availabilityText: {
+    marginLeft: 8,
+    color: '#4a5568',
+    fontSize: 12,
   },
 });
 

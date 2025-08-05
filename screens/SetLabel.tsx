@@ -68,7 +68,7 @@ const SetLabel = ({ route }: Props) => {
   const [mrp, setMrp] = useState('');
   const [usp, setUsp] = useState(0);
   const [pkdDate, setPkdDate] = useState(new Date());
-  const [expDays, setExpDays] = useState(10);
+  const [expDays, setExpDays] = useState(1);
   const [printCount, setPrintCount] = useState('1');
   const [isLoading, setIsLoading] = useState(false);
   const [showPicker, setShowPicker] = useState(false);
@@ -189,6 +189,13 @@ const SetLabel = ({ route }: Props) => {
     checkPrinterConnection();
   };
 
+  
+  const refreshItems = async () => {
+    setRefreshing(true);  
+    fetchItems();
+    checkPrinterConnection();
+  }
+
   // Generate label preview
   const generatePreviewContent = () => {
     if (!item) return null;
@@ -285,7 +292,7 @@ const SetLabel = ({ route }: Props) => {
       const shopX = getCenterX(shopName, 30); // TSS24.BF2, scale 2
       const fssaiX = getCenterX(`fssai: ${fssai}`, 13); // font "2"
       const itemX = getCenterX(`Item : ${item}`, 13); // font "4"
-      const wtMrpX = getCenterX(`wt : ${weight}g   MRP : ₹${parseFloat(mrp).toFixed(2)}`, 12); // font "2"
+      const wtMrpX = getCenterX(`wt : ${weight}g   MRP : ${parseFloat(mrp).toFixed(2)}`, 12); // font "2"
       const datesX = getCenterX(`PKD:${formatDate(pkdDate)}-EXP:${formatDate(expDate)}`, 13); // font "1", scale 2 → 24
 
       const commands = [
@@ -293,9 +300,11 @@ const SetLabel = ({ route }: Props) => {
         `GAP ${gapHeight} mm, 0\n`,
         'DENSITY 10\n',
         'DIRECTION 0\n',
+        'CODEPAGE UTF-8\n',
         'CLS\n',
 
         `BOX 1,25,370,220,5\n`,
+        `TEXT 100,100,"0",0,1,1,"தமிழ் மொழி"\n`,
         `TEXT ${shopX},40,"TSS24.BF2",0,2,1,"${shopName}"\n`,
         `TEXT ${fssaiX},65,"2",0,1,1,"fssai: ${fssai}"\n`,
         `TEXT ${itemX},95,"4",0,1,1,"Item : ${item}"\n`,
@@ -383,7 +392,13 @@ const SetLabel = ({ route }: Props) => {
         />
       }
     >
-      <Text style={styles.header}>Product Label Printer</Text>
+      <View style={styles.headerContainer}>
+        <Text style={styles.header}>Product Label Printer</Text>
+        <TouchableOpacity
+        onPress={refreshItems}>
+          <Icon name="refresh" size={30} color={Colors.primary} />
+        </TouchableOpacity>
+      </View>
 
       {renderPrinterStatus()}
 
@@ -463,9 +478,35 @@ const SetLabel = ({ route }: Props) => {
             <RNPickerSelect
               onValueChange={(v) => setExpDays(v)}
               items={[
+                { label: '01 day', value: 1 },
+                { label: '02 days', value: 2 },
+                { label: '03 days', value: 3 },
+                { label: '04 days', value: 4 },
+                { label: '05 days', value: 5 },
+                { label: '06 days', value: 6 },
+                { label: '07 days', value: 7 },
+                { label: '08 days', value: 8 },
+                { label: '09 days', value: 9 },
                 { label: '10 days', value: 10 },
+                { label: '11 days', value: 11 },
+                { label: '12 days', value: 12 },
+                { label: '13 days', value: 13 },
+                { label: '14 days', value: 14 },
                 { label: '15 days', value: 15 },
+                { label: '16 days', value: 16 },
+                { label: '17 days', value: 17 },
+                { label: '18 days', value: 18 },
+                { label: '19 days', value: 19 },
                 { label: '20 days', value: 20 },
+                { label: '21 days', value: 21 },
+                { label: '22 days', value: 22 },
+                { label: '23 days', value: 23 },
+                { label: '24 days', value: 24 },
+                { label: '25 days', value: 25 },
+                { label: '26 days', value: 26 },
+                { label: '27 days', value: 27 },
+                { label: '28 days', value: 28 },
+                { label: '29 days', value: 29 },
                 { label: '30 days', value: 30 },
               ]}
               value={expDays}
@@ -684,6 +725,12 @@ const styles = StyleSheet.create({
     fontSize: 14,
     marginBottom: 4,
     color: Colors.text,
+  },
+  headerContainer: {
+    flexDirection: 'row',
+    // alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 20,
   },
 });
 

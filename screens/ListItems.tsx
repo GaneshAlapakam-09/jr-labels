@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { 
-  View, 
-  Text, 
-  FlatList, 
-  TouchableOpacity, 
-  StyleSheet, 
+import {
+  View,
+  Text,
+  FlatList,
+  TouchableOpacity,
+  StyleSheet,
   ActivityIndicator,
   RefreshControl,
   Alert,
@@ -30,10 +30,10 @@ interface ApiResponse {
   data: Item[];
 }
 
-interface Item { 
+interface Item {
   id: number;
-  name: string; 
-  weight: number; 
+  name: string;
+  weight: number;
 }
 
 const ListItems = ({ navigation, route }: Props) => {
@@ -60,6 +60,9 @@ const ListItems = ({ navigation, route }: Props) => {
 
     if (!editedName.trim()) {
       errors.name = 'Name is required';
+      isValid = false;
+    } else if (editedName.trim().length > 20) {
+      errors.name = 'Name must be 20 characters or less';
       isValid = false;
     }
 
@@ -161,11 +164,11 @@ const ListItems = ({ navigation, route }: Props) => {
         `http://66.103.210.129:8777/label/printer/update_item/${currentItem.id}`,
         updatedItem
       );
-      
-      setItems(items.map(item => 
+
+      setItems(items.map(item =>
         item.id === currentItem.id ? updatedItem : item
       ));
-      
+
       setEditModalVisible(false);
     } catch (err) {
       Alert.alert('Error', 'Failed to update item. Please try again.');
@@ -186,9 +189,9 @@ const ListItems = ({ navigation, route }: Props) => {
       <View style={styles.centerContainer}>
         <Icon name="error-outline" size={50} color="#ff4444" />
         <Text style={styles.errorText}>{error}</Text>
-        <Button 
-          title="Retry" 
-          onPress={fetchItems} 
+        <Button
+          title="Retry"
+          onPress={fetchItems}
           color="#6200ee"
         />
       </View>
@@ -199,7 +202,7 @@ const ListItems = ({ navigation, route }: Props) => {
     <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>My Items</Text>
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.addButton}
           onPress={() => navigation.navigate('AddItem', { userId })}
         >
@@ -207,7 +210,7 @@ const ListItems = ({ navigation, route }: Props) => {
         </TouchableOpacity>
       </View>
 
-      <FlatList 
+      <FlatList
         data={items}
         keyExtractor={item => item.id.toString()}
         renderItem={({ item }) => (
@@ -254,30 +257,39 @@ const ListItems = ({ navigation, route }: Props) => {
         <View style={styles.modalContainer}>
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Edit Item</Text>
-            
-            <TextInput
-              style={[styles.input, validationErrors.name ? styles.inputError : null]}
-              value={editedName}
-              onChangeText={(text) => {
-                setEditedName(text);
-                if (validationErrors.name) {
-                  setValidationErrors({...validationErrors, name: ''});
-                }
-              }}
-              placeholder="Item name"
-              autoFocus={true}
-            />
+
+            <View>
+              <TextInput
+                style={[styles.input, validationErrors.name ? styles.inputError : null]}
+                value={editedName}
+                onChangeText={(text) => {
+                  setEditedName(text);
+                  if (validationErrors.name) {
+                    setValidationErrors({ ...validationErrors, name: '' });
+                  }
+                }}
+                placeholder="Item name"
+                autoFocus={true}
+                maxLength={20}
+              />
+              <Text style={styles.charCounter}>
+                {editedName.length}/20 characters
+              </Text>
+              {validationErrors.name ? (
+                <Text style={styles.errorMessage}>{validationErrors.name}</Text>
+              ) : null}
+            </View>
             {validationErrors.name ? (
               <Text style={styles.errorMessage}>{validationErrors.name}</Text>
             ) : null}
-            
+
             <TextInput
               style={[styles.input, validationErrors.weight ? styles.inputError : null]}
               value={editedWeight}
               onChangeText={(text) => {
                 setEditedWeight(text);
                 if (validationErrors.weight) {
-                  setValidationErrors({...validationErrors, weight: ''});
+                  setValidationErrors({ ...validationErrors, weight: '' });
                 }
               }}
               placeholder="Weight (kg)"
@@ -286,7 +298,7 @@ const ListItems = ({ navigation, route }: Props) => {
             {validationErrors.weight ? (
               <Text style={styles.errorMessage}>{validationErrors.weight}</Text>
             ) : null}
-            
+
             <View style={styles.modalButtons}>
               <Pressable
                 style={[styles.button, styles.cancelButton]}
@@ -294,7 +306,7 @@ const ListItems = ({ navigation, route }: Props) => {
               >
                 <Text style={styles.buttonText}>Cancel</Text>
               </Pressable>
-              
+
               <Pressable
                 style={[styles.button, styles.saveButton]}
                 onPress={handleSaveEdit}
@@ -457,6 +469,14 @@ const styles = StyleSheet.create({
     color: 'white',
     fontWeight: 'bold',
   },
+  charCounter: {
+    fontSize: 12,
+    color: '#666',
+    textAlign: 'right',
+    marginTop: -10,
+    marginBottom: 10,
+  },
+
 });
 
 export default ListItems;

@@ -42,6 +42,9 @@ const AddItem = ({ navigation, route }: Props) => {
     if (!name.trim()) {
       newErrors.name = 'Item name is required';
       isValid = false;
+    } else if (name.trim().length > 20) {
+      newErrors.name = 'Item name must be 20 characters or less';
+      isValid = false;
     }
 
     if (!weight.trim()) {
@@ -124,7 +127,11 @@ const AddItem = ({ navigation, route }: Props) => {
               setName(text);
               if (errors.name) setErrors({ ...errors, name: '' });
             }}
+            maxLength={20}
           />
+          <Text style={styles.charCounter}>
+            {name.length}/20 characters
+          </Text>
           {errors.name ? <Text style={styles.errorText}>{errors.name}</Text> : null}
         </View>
 
@@ -236,6 +243,12 @@ const styles = StyleSheet.create({
     color: '#6200ee',
     fontSize: 16,
     marginLeft: 8,
+  },
+  charCounter: {
+    fontSize: 12,
+    color: '#666',
+    textAlign: 'right',
+    marginTop: 4,
   },
 });
 
