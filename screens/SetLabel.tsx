@@ -189,9 +189,9 @@ const SetLabel = ({ route }: Props) => {
     checkPrinterConnection();
   };
 
-  
+
   const refreshItems = async () => {
-    setRefreshing(true);  
+    setRefreshing(true);
     fetchItems();
     checkPrinterConnection();
   }
@@ -270,7 +270,7 @@ const SetLabel = ({ route }: Props) => {
       expDate.setDate(expDate.getDate() + expDays);
 
       const widthDots = mmToDots(labelWidth);
-      const gapHeight = mmToDots(2);
+      const gapHeight = mmToDots(3);
 
       const response = await axios.get<ApiResponse>(
         `http://66.103.210.129:8777/label/printer/items/${userId}`
@@ -395,7 +395,7 @@ const SetLabel = ({ route }: Props) => {
       <View style={styles.headerContainer}>
         <Text style={styles.header}>Product Label Printer</Text>
         <TouchableOpacity
-        onPress={refreshItems}>
+          onPress={refreshItems}>
           <Icon name="refresh" size={30} color={Colors.primary} />
         </TouchableOpacity>
       </View>
